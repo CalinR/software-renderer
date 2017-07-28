@@ -167,6 +167,32 @@ export default class Camera {
             const y2a = this.height / 2 + (-this.yaw(yceil, tz2) * yscale2);
             const y2b = this.height / 2 + (-this.yaw(yfloor, tz2) * yscale2);
 
+            let nyceil = 0;
+            let nyfloor = 0;
+            const neighbour = sector.vertices[i].neighbour;
+
+            if(neighbour > -1){
+                nyceil = this.world[neighbour].ceiling - this.parent.z;
+                nyfloor = this.world[neighbour].floor - this.parent.z; 
+            }
+
+            let ny1a = this.height / 2 + (-this.yaw(nyceil, tz1) * yscale1);
+            let ny1b = this.height / 2 + (-this.yaw(nyfloor, tz1) * yscale1);
+            let ny2a = this.height / 2 + (-this.yaw(nyceil, tz2) * yscale2);
+            let ny2b = this.height / 2 + (-this.yaw(nyfloor, tz2) * yscale2);
+
+            // float nyceil=0, nyfloor=0;
+
+            // if(neighbor >= 0)
+            // {
+            //     /* Something is showing through this wall (portal). */
+            //     /* Perspective-transform the floor and ceiling coordinates of the neighboring sector. */
+            //     nyceil  = sectors[neighbor].ceil  - player.where.z;
+            //     nyfloor = sectors[neighbor].floor - player.where.z;
+            // }
+            // int ny1a = H/2 + (int)( -Yaw(nyceil, tz1) * yscale1), ny1b = H/2 + (int)( -Yaw(nyfloor, tz1) * yscale1);
+            // int ny2a = H/2 + (int)( -Yaw(nyceil, tz2) * yscale2), ny2b = H/2 + (int)( -Yaw(nyfloor, tz2) * yscale2);
+
             /* Disable by default */
             /* Use the following to draw out rotated vectors */
             // this.context.save();
@@ -181,27 +207,82 @@ export default class Camera {
             /* USe the following to draw perspective transformed vertices */
             this.context.save();
             // Draws lines between vertices
-            this.context.beginPath();
+           
             this.context.strokeStyle = 'black';
-            this.context.moveTo(x1, y1a);
-            this.context.lineTo(x2, y2a);
-            this.context.lineTo(x2, y2b);
-            this.context.lineTo(x1, y1b);
-            this.context.lineTo(x1, y1a);
-            this.context.stroke();
-            if(sector.vertices[i].neighbour > -1){
-                this.context.fillStyle = 'red';
+
+            if(neighbour > -1){
+                this.context.fillStyle = '#7000c2';
+
+                // If neighbour ceiling is lower than current sector ceiling, render it
+                if(this.world[neighbour].ceiling < sector.ceiling){
+                    // Draw ceiling of neighbour
+                    this.context.beginPath();
+                    this.context.moveTo(x1, y1a);
+                    this.context.lineTo(x2, y2a);
+                    this.context.lineTo(x2, ny2a);
+                    this.context.lineTo(x1, ny1a);
+                    this.context.lineTo(x1, y1a);
+                    this.context.stroke();
+                    this.context.fill();
+                    this.context.closePath();
+                }
+                else {
+                    ny1a = y1a;
+                    ny2a = y2a;
+                }
+
+                // If neighbour floor is higher than current sector floor, render it
+                if(this.world[neighbour].floor > sector.floor){
+                    // Draw floor of neighbour
+                    this.context.beginPath();
+                    this.context.moveTo(x1, y1b);
+                    this.context.lineTo(x2, y2b);
+                    this.context.lineTo(x2, ny2b);
+                    this.context.lineTo(x1, ny1b);
+                    this.context.lineTo(x1, y1b);
+                    this.context.stroke();
+                    this.context.fill();
+                    this.context.closePath()
+                }
+                else {
+                    ny1b = y1b;
+                    ny2b = y2b;
+                }
+                
+                // Render portal
+                this.context.beginPath();
+                this.context.fillStyle = '#ac0002';
+                this.context.moveTo(x1, ny1a);
+                this.context.lineTo(x2, ny2a);
+                this.context.lineTo(x2, ny2b);
+                this.context.lineTo(x1, ny1b);
+                this.context.lineTo(x1, ny1b);
+                this.context.stroke();
+                this.context.fill();
+                this.context.closePath();
             }
             else {
-                this.context.fillStyle = '#ccc';
+                this.context.fillStyle = '#aba9ab';
+                // Draw Wall
+                this.context.moveTo(x1, y1a);
+                this.context.lineTo(x2, y2a);
+                this.context.lineTo(x2, y2b);
+                this.context.lineTo(x1, y1b);
+                this.context.lineTo(x1, y1a);
+                this.context.stroke();
+                this.context.fill();
             }
-            this.context.fill();
+
+            
+
             // Draws vertices
-            this.context.fillStyle = 'red';
-            this.context.fillRect(x1, y1a, 2, 2);
-            this.context.fillRect(x1, y1b, 2, 2);
-            this.context.fillRect(x2, y2a, 2, 2);
-            this.context.fillRect(x2, y2b, 2, 2);
+            this.context.fillStyle = '#e74c3c';
+            const vertexSize = 4;
+            this.context.beginPath();
+            this.context.fillRect(x1-vertexSize/2, y1a-vertexSize/2, vertexSize, vertexSize);
+            this.context.fillRect(x1-vertexSize/2, y1b-vertexSize/2, vertexSize, vertexSize);
+            this.context.fillRect(x2-vertexSize/2, y2a-vertexSize/2, vertexSize, vertexSize);
+            this.context.fillRect(x2-vertexSize/2, y2b-vertexSize/2, vertexSize, vertexSize);
             this.context.closePath();
             this.context.restore();   
         }
