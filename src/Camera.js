@@ -1,4 +1,4 @@
-import { toRadians, intersect, intersectBox, pointSide, scalerInit, scalerNext, clamp } from './utils/'
+import { toRadians, intersectBox, pointSide, scalerInit, scalerNext, clamp } from './utils/'
 import GameObject from './GameObject'
 
 function CameraException(message) {
@@ -81,7 +81,6 @@ export default class Camera {
     }
 
     changeSector(){
-        // console.log('moved', this.lastPosition, this.currentPosition);
         for(const sector of this.world){
             for(let i = 0; i<sector.vertices.length; i++){
                 const vx1 = sector.vertices[i].x;
@@ -101,32 +100,18 @@ export default class Camera {
         } 
     }
 
-    render(){
-        if(!this.world){
-            throw new CameraException('No world to render');
-        }
-
-        if(this.isMoving()){
-            this.changeSector();
-        }
-
-        this.clear();
-
-        const sector = this.world[this.sector];
-
+    renderSector(sector, sx1, sx2, ytop, ybottom){
         if(!sector){
             return false;
         }
 
         for(let i = 0; i<sector.vertices.length; i++){
-            /* Acquire the x,y coordinates of the two vertexes forming the edge of the sector */
-            /* Transform the vertices into the player's view */
             const vx1 = sector.vertices[i].x - this.parent.x;
             const vy1 = sector.vertices[i].y - this.parent.y;
             const vx2 = (i >= sector.vertices.length-1 ? sector.vertices[0].x : sector.vertices[i+1].x) - this.parent.x;
             const vy2 = (i >= sector.vertices.length-1 ? sector.vertices[0].y : sector.vertices[i+1].y) - this.parent.y;
 
-            /* Rotate them around the player's view */
+            // rotate points around player
             const angle = toRadians(this.parent.rotation);
             const pcos = Math.cos(angle);
             const psin = Math.sin(angle);
@@ -139,21 +124,14 @@ export default class Camera {
             if(tz1 <= 0 && tz2 <= 0) continue;
 
             /* Is any part of the wall behind the player */
-            if(tz1 <= 0 || tz2 <= 0)
-            {
-                const nearz = 5; // Not sure why this needs to be this
-                const farz = 5; // Not sure why this needs to be this
-                const nearside = 0.00001; // Not sure why this needs to be this
-                const farside = 20; // Not sure why this needs to be this
-
-                // Find an intersection between the wall and the approximate edges of player's view
-                const i1 = intersect(tx1,tz1,tx2,tz2, -nearside,nearz, -farside,farz);
-                const i2 = intersect(tx1,tz1,tx2,tz2, nearside,nearz, farside,farz);
-
-                if(tz1 < nearz) { if(i1.y > 0) { tx1 = i1.x; tz1 = i1.y; } else { tx1 = i2.x; tz1 = i2.y; } }
-                if(tz2 < nearz) { if(i1.y > 0) { tx2 = i1.x; tz2 = i1.y; } else { tx2 = i2.x; tz2 = i2.y; } }
+            if(tz1 <= 0){
+                tx1 = (0.01 - tz1) * (tx2 - tx1) / (tz2 - tz1) + tx1;
+                tz1 = 0.01;
             }
-
+            if(tz2 <= 0){
+                tx2 = (0.01 - tz2) * (tx1 - tx2) / (tz1 - tz2) + tx2;
+                tz2 = 0.01;
+            }
 
             /* Do perspective transformation */
             const xscale1 = (this.width * this.hfov) / tz1;
@@ -187,132 +165,67 @@ export default class Camera {
             let ny2a = this.height / 2 + (-this.yaw(nyceil, tz2) * yscale2);
             let ny2b = this.height / 2 + (-this.yaw(nyfloor, tz2) * yscale2);
 
-            const beginX = Math.max(x1, 0);
-            const endX = Math.min(x1, this.width-1);
+            const beginX = parseInt(Math.max(x1, sx1));
+            const endX = parseInt(Math.min(x2, sx2));
 
-            const ya_int = scalerInit(x1, beginX, x2, y1a, y2a);
-            const yb_int = scalerInit(x1, beginX, x2, y1b, y2b);
-            const nya_int = scalerInit(x1, beginX, x2, ny1a, ny2a);
-            const nyb_int = scalerInit(x1, beginX, x2, ny1b, ny2b);
+            // Is the wall on screen
+            if(endX < 0 || beginX > this.width){
+                continue;
+            }
 
-            // for(var x = beginX; x <= endX; x++){
-            //     const ya = scalerNext(ya_int);
-            //     const yb = scalerNext(yb_int);
-
-            //     const cya = clamp(ya, );
-
-            //     // int ya = Scaler_Next(&ya_int);
-            //     // int yb = Scaler_Next(&yb_int);
-            //     // /* Clamp the ya & yb */
-            //     // int cya = clamp(ya, ytop[x],ybottom[x]);
-            //     // int cyb = clamp(yb, ytop[x],ybottom[x]);
-            // }
-
-
-            // int beginx = max(x1, now.sx1), endx = min(x2, now.sx2);
-
-            /* Disable by default */
-            /* Use the following to draw out rotated vectors */
-            // this.context.save();
-            // this.context.beginPath();
-            // this.context.strokeStyle = 'black';
-            // this.context.moveTo(tx1 + (this.width / 2), tz1 + (this.height / 2));
-            // this.context.lineTo(tx2 + (this.width / 2), tz2 + (this.height / 2));
-            // this.context.stroke();
-            // this.context.closePath();
-            // this.context.restore();  
-            
-            /* Use the following to draw perspective transformed vertices */
-            this.context.save();
-            // Draws lines between vertices
-           
-            this.context.strokeStyle = 'black';
-
-            if(neighbour > -1){
-                this.context.fillStyle = '#7000c2';
-
-                // If neighbour ceiling is lower than current sector ceiling, render it
-                if(this.world[neighbour].ceiling < sector.ceiling){
-                    // Draw ceiling of neighbour
-                    this.context.beginPath();
-                    this.context.moveTo(x1, y1a);
-                    this.context.lineTo(x2, y2a);
-                    this.context.lineTo(x2, ny2a);
-                    this.context.lineTo(x1, ny1a);
-                    this.context.lineTo(x1, y1a);
-                    this.context.stroke();
-                    this.context.fill();
-                    this.context.closePath();
-                }
-                else {
-                    ny1a = y1a;
-                    ny2a = y2a;
-                }
-
-                // If neighbour floor is higher than current sector floor, render it
-                if(this.world[neighbour].floor > sector.floor){
-                    // Draw floor of neighbour
-                    this.context.beginPath();
-                    this.context.moveTo(x1, y1b);
-                    this.context.lineTo(x2, y2b);
-                    this.context.lineTo(x2, ny2b);
-                    this.context.lineTo(x1, ny1b);
-                    this.context.lineTo(x1, y1b);
-                    this.context.stroke();
-                    this.context.fill();
-                    this.context.closePath()
-                }
-                else {
-                    ny1b = y1b;
-                    ny2b = y2b;
-                }
+            for(let x = beginX; x < endX; x++){
+                /* Acquire the Y coordinates for our floor & ceiling for this X coordinate */
+                const ya = (x-x1) * (y2a-y1a) / (x2-x1) + y1a;
+                const yb = (x-x1) * (y2b-y1b) / (x2-x1) + y1b;
                 
-                // Render portal
-                this.context.beginPath();
-                this.context.fillStyle = '#ac0002';
-                this.context.moveTo(x1, ny1a);
-                this.context.lineTo(x2, ny2a);
-                this.context.lineTo(x2, ny2b);
-                this.context.lineTo(x1, ny1b);
-                this.context.lineTo(x1, ny1b);
-                this.context.stroke();
-                this.context.fill();
-                this.context.closePath();
-            }
-            else {
-                this.context.fillStyle = '#aba9ab';
-                // Draw Wall
-                this.context.moveTo(x1, y1a);
-                this.context.lineTo(x2, y2a);
-                this.context.lineTo(x2, y2b);
-                this.context.lineTo(x1, y1b);
-                this.context.lineTo(x1, y1a);
-                this.context.stroke();
-                this.context.fill();
+                /* Clamp the ya & yb */
+                const cya = clamp(ya, ytop[x], ybottom[x]);
+                const cyb = clamp(yb, ytop[x],ybottom[x]);
+
+                /* Render ceiling: everything above this sector's ceiling height. */
+                this.vline(x, ytop[x], cya+1, '#111111');
+                /* Render floor: everything below this sector's floor height. */
+                this.vline(x,cyb,  ybottom[x], '#0000FF');
+
+                this.vline(x, cya+1, cyb+1, 'red');
             }
 
-            
-
-            // Draws vertices
-            this.context.fillStyle = '#e74c3c';
-            const vertexSize = 4;
-            this.context.beginPath();
-            this.context.fillRect(x1-vertexSize/2, y1a-vertexSize/2, vertexSize, vertexSize);
-            this.context.fillRect(x1-vertexSize/2, y1b-vertexSize/2, vertexSize, vertexSize);
-            this.context.fillRect(x2-vertexSize/2, y2a-vertexSize/2, vertexSize, vertexSize);
-            this.context.fillRect(x2-vertexSize/2, y2b-vertexSize/2, vertexSize, vertexSize);
-            this.context.closePath();
-            this.context.restore();   
         }
-        
+    }
 
-        /* Disable by default */
-        /* Use the following to draw out player for rotated vectors */
-        // this.context.beginPath();
-        // this.context.fillStyle = 'red';
-        // this.context.fillRect(this.width/2 - 4, this.height/2 - 4, 8, 8);
-        // this.context.closePath();
+    vline(x, y1, y2, color){
+        this.context.save();
+        this.context.beginPath();
+        this.context.strokeStyle = color;
+        this.context.moveTo(x, y1);
+        this.context.lineTo(x, y2);
+        this.context.stroke();
+        this.context.closePath();
+        this.context.restore();
+    }
 
+    render(){
+        if(!this.world){
+            throw new CameraException('No world to render');
+        }
+
+        if(this.isMoving()){
+            this.changeSector();
+        }
+
+        this.clear();
+
+        const sector = this.world[this.sector];
+
+        let ytop = [];
+        let ybottom = [];
+
+        for(var x=0; x<this.width-1; x++){
+            ytop[x] = 0;
+            ybottom[x] = this.height - 1;
+        }
+
+        this.renderSector(sector, 0, this.width-1, ytop, ybottom);
         this.lastPosition = this.currentPosition;
     }
 }
