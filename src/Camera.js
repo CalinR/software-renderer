@@ -173,6 +173,9 @@ export default class Camera {
                 continue;
             }
 
+            let nytop = [];
+            let nybottom = [];
+
             for(let x = beginX; x < endX; x++){
                 /* Acquire the Y coordinates for our floor & ceiling for this X coordinate */
                 const ya = (x-x1) * (y2a-y1a) / (x2-x1) + y1a;
@@ -182,12 +185,20 @@ export default class Camera {
                 const cya = clamp(ya, ytop[x], ybottom[x]);
                 const cyb = clamp(yb, ytop[x],ybottom[x]);
 
+                nytop[x] = cya+1;
+                nybottom[x] = cyb;
+
                 /* Render ceiling: everything above this sector's ceiling height. */
                 this.vline(x, ytop[x], cya+1, '#111111');
                 /* Render floor: everything below this sector's floor height. */
                 this.vline(x,cyb,  ybottom[x], '#0000FF');
+                if(neighbour==-1){
+                    this.vline(x, cya+1, cyb+1, '#cccccc');
+                }
+            }
 
-                this.vline(x, cya+1, cyb+1, 'red');
+            if(neighbour>-1){
+                this.renderSector(this.world[neighbour], beginX, endX, nytop, nybottom);
             }
 
         }
