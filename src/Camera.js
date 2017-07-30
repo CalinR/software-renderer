@@ -1,4 +1,5 @@
-import { toRadians, intersect, intersectBox, pointSide } from './utils/'
+import { toRadians, intersect, intersectBox, pointSide, scalerInit, scalerNext, clamp } from './utils/'
+import GameObject from './GameObject'
 
 function CameraException(message) {
    this.message = message;
@@ -12,6 +13,9 @@ export default class Camera {
         }
         if(!parent){
             throw new CameraException('No parent assigned');
+        }
+        if(parent instanceof GameObject == false){
+            throw new CameraException('Parent must be an instance of GameObject');
         }
 
         this.width = element.width;
@@ -50,6 +54,7 @@ export default class Camera {
             }
 
             if(wallMatches == sector.vertices.length){
+                this.parent.sector = sector;
                 return sector.id;
                 break;
             }
@@ -87,6 +92,7 @@ export default class Camera {
                 if(intersectBox(this.currentPosition.x, this.currentPosition.y, this.lastPosition.x, this.lastPosition.y, vx1, vy1, vx2, vy2)){
                     if(pointSide(this.currentPosition.x, this.currentPosition.y, vx1, vy1, vx2, vy2) > 0){
                         this.sector = sector.id;
+                        this.parent.sector = sector;
                         console.log('you are now in sector ', sector.id);
                     }
                     break;
@@ -159,8 +165,8 @@ export default class Camera {
 
             if(x1 >= x2) continue;
 
-            const yceil = sector.ceiling - this.parent.z;
-            const yfloor = sector.floor - this.parent.z;
+            const yceil = sector.ceiling - (this.parent.z + this.z);
+            const yfloor = sector.floor - (this.parent.z + this.z);
 
             const y1a = this.height / 2 + (-this.yaw(yceil, tz1) * yscale1);
             const y1b = this.height / 2 + (-this.yaw(yfloor, tz1) * yscale1);
@@ -172,8 +178,8 @@ export default class Camera {
             const neighbour = sector.vertices[i].neighbour;
 
             if(neighbour > -1){
-                nyceil = this.world[neighbour].ceiling - this.parent.z;
-                nyfloor = this.world[neighbour].floor - this.parent.z; 
+                nyceil = this.world[neighbour].ceiling - (this.parent.z + this.z);
+                nyfloor = this.world[neighbour].floor - (this.parent.z + this.z); 
             }
 
             let ny1a = this.height / 2 + (-this.yaw(nyceil, tz1) * yscale1);
@@ -181,17 +187,29 @@ export default class Camera {
             let ny2a = this.height / 2 + (-this.yaw(nyceil, tz2) * yscale2);
             let ny2b = this.height / 2 + (-this.yaw(nyfloor, tz2) * yscale2);
 
-            // float nyceil=0, nyfloor=0;
+            const beginX = Math.max(x1, 0);
+            const endX = Math.min(x1, this.width-1);
 
-            // if(neighbor >= 0)
-            // {
-            //     /* Something is showing through this wall (portal). */
-            //     /* Perspective-transform the floor and ceiling coordinates of the neighboring sector. */
-            //     nyceil  = sectors[neighbor].ceil  - player.where.z;
-            //     nyfloor = sectors[neighbor].floor - player.where.z;
+            const ya_int = scalerInit(x1, beginX, x2, y1a, y2a);
+            const yb_int = scalerInit(x1, beginX, x2, y1b, y2b);
+            const nya_int = scalerInit(x1, beginX, x2, ny1a, ny2a);
+            const nyb_int = scalerInit(x1, beginX, x2, ny1b, ny2b);
+
+            // for(var x = beginX; x <= endX; x++){
+            //     const ya = scalerNext(ya_int);
+            //     const yb = scalerNext(yb_int);
+
+            //     const cya = clamp(ya, );
+
+            //     // int ya = Scaler_Next(&ya_int);
+            //     // int yb = Scaler_Next(&yb_int);
+            //     // /* Clamp the ya & yb */
+            //     // int cya = clamp(ya, ytop[x],ybottom[x]);
+            //     // int cyb = clamp(yb, ytop[x],ybottom[x]);
             // }
-            // int ny1a = H/2 + (int)( -Yaw(nyceil, tz1) * yscale1), ny1b = H/2 + (int)( -Yaw(nyfloor, tz1) * yscale1);
-            // int ny2a = H/2 + (int)( -Yaw(nyceil, tz2) * yscale2), ny2b = H/2 + (int)( -Yaw(nyfloor, tz2) * yscale2);
+
+
+            // int beginx = max(x1, now.sx1), endx = min(x2, now.sx2);
 
             /* Disable by default */
             /* Use the following to draw out rotated vectors */
@@ -204,7 +222,7 @@ export default class Camera {
             // this.context.closePath();
             // this.context.restore();  
             
-            /* USe the following to draw perspective transformed vertices */
+            /* Use the following to draw perspective transformed vertices */
             this.context.save();
             // Draws lines between vertices
            
