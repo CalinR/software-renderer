@@ -1,4 +1,4 @@
-import { toRadians, intersectBox, pointSide, scalerInit, scalerNext, clamp } from './utils/'
+import { toRadians, intersectBox, pointSide, clamp } from './utils/'
 import GameObject from './GameObject'
 
 function CameraException(message) {
@@ -34,6 +34,17 @@ export default class Camera {
             y: parent.y
         }
         this.sector = this.getActiveSector();
+
+        Camera.optimizeCanvas(element);
+    }
+
+    static optimizeCanvas(canvas){
+        // canvas.style.imageRendering = 'optimizeSpeed'; // Older versions of FF
+        // canvas.style.imageRendering = '-moz-crisp-edges'; // FF 6.0+
+        // canvas.style.imageRendering = '-webkit-optimize-contrast'; // Safari
+        // canvas.style.imageRendering = '-o-crisp-edges'; // Opera 12+
+        canvas.style.imageRendering = 'pixelated'; // Modern Browsers
+        // canvas.style['-ms-interpolation-mode'] = 'nearest-neighor'; // IE
     }
 
     getActiveSector(){
@@ -41,7 +52,7 @@ export default class Camera {
             throw new CameraException('No world to assigned to camera');
         }
 
-        for(let sector of this.world){
+        for(let sector of this.world.sectors){
             let wallMatches = 0;
             for(let i = 0; i<sector.vertices.length; i++){
                 const vx1 = sector.vertices[i].x;
@@ -81,7 +92,7 @@ export default class Camera {
     }
 
     changeSector(){
-        for(const sector of this.world){
+        for(const sector of this.world.sectors){
             for(let i = 0; i<sector.vertices.length; i++){
                 const vx1 = sector.vertices[i].x;
                 const vy1 = sector.vertices[i].y;
@@ -156,8 +167,8 @@ export default class Camera {
             const neighbour = sector.vertices[i].neighbour;
 
             if(neighbour > -1){
-                nyceil = this.world[neighbour].ceiling - (this.parent.z + this.z);
-                nyfloor = this.world[neighbour].floor - (this.parent.z + this.z); 
+                nyceil = this.world.sectors[neighbour].ceiling - (this.parent.z + this.z);
+                nyfloor = this.world.sectors[neighbour].floor - (this.parent.z + this.z); 
             }
 
             let ny1a = this.height / 2 + (-this.yaw(nyceil, tz1) * yscale1);
@@ -189,30 +200,109 @@ export default class Camera {
                 nybottom[x] = cyb;
 
                 /* Render ceiling: everything above this sector's ceiling height. */
-                this.vline(x, ytop[x], cya+1, '#111111');
+                this.vline(x, ytop[x], cya+1, '#34495e');
                 /* Render floor: everything below this sector's floor height. */
-                this.vline(x,cyb,  ybottom[x], '#0000FF');
-                if(neighbour==-1){
-                    this.vline(x, cya+1, cyb+1, '#cccccc');
+                this.vline(x,cyb,  ybottom[x], '#3498db');
+
+                if(neighbour<0){
+                    this.vline(x, cya+1, cyb+1, x == beginX || x == endX ? '#000000' : '#ecf0f1');
+                }
+                else {
+                    /* Aquire the Y coordinates for our neighbour's floor and ceiling for this X coordinate */
+                    const nya  = (x - x1) * (ny2a-ny1a) / (x2 - x1) + ny1a;
+                    const nyb = (x - x1) * (ny2b - ny1b) / (x2 - x1) + ny1b;
+
+                    const cnya = clamp(nya, ytop[x], ybottom[x]);
+                    const cnyb = clamp(nyb, ytop[x], ybottom[x]);
+
+                    // If our ceiling is higher than the neighours ceiling, render it
+                    if(cnya > cya){
+                        this.vline(x, cya, cnya+1, x == beginX || x == endX ? '#000000' : '#ecf0f1');
+                        nytop[x] = clamp(cnya, nytop[x], this.height); // 199 is likely not correct
+                    }
+                    else {
+                        nytop[x] = clamp(cya, nytop[x], this.height);
+                    }
+
+                    // If our floor is lower than the neighbours floor, render it
+                    if(cyb > cnyb){
+                        this.vline(x, cnyb - 1, cyb, x == beginX || x == endX ? '#000000' : '#2980b9');
+                        nybottom[x] = clamp(cnyb, 0, ybottom[x]);
+                    }
+                    else {
+                        nybottom[x] = clamp(cyb, 0, ybottom[x]);
+                    }
                 }
             }
 
+
             if(neighbour>-1){
-                this.renderSector(this.world[neighbour], beginX, endX, nytop, nybottom);
+                this.renderSector(this.world.sectors[neighbour], beginX, endX, nytop, nybottom);
             }
 
         }
     }
 
+    renderSprites(){
+        for(const sprite of this.world.enemies){
+            const vx1 = sprite.x - this.parent.x;
+            const vy1 = sprite.y - this.parent.y;
+
+            // rotate sprite around player
+            const angle = toRadians(this.parent.rotation);
+            const pcos = Math.cos(angle);
+            const psin = Math.sin(angle);
+            const otx1 = vx1 * psin - vy1 * pcos;
+            const tz1 = vx1 * pcos + vy1 * psin;
+
+            /* Is the wall at least partially in front of the player? */
+            if(tz1 <= 0) continue;
+
+            /* Do perspective transformation */
+            const tx1 = otx1 - 5; // 5 needs to be sprite size / 2
+            const tx2 = otx1 + 5; // 5 needs to be sprite size / 2
+            const xscale1 = (this.width * this.hfov) / tz1;
+            const yscale1 = (this.height * this.vfov) / tz1;
+            const x1 = this.width / 2 + (-tx1 * xscale1);
+            const x2 = this.width / 2 + (-tx2 * xscale1);
+            const ox1 = this.width / 2 + (-otx1 * xscale1);
+            const diff = Math.max(x1, x2) - Math.min(x1, x2);
+            const yfloor = 0 - (this.z + this.parent.z); // 0 needs to be sprite's z coordinate
+
+            const y1b = this.height / 2 + (-this.yaw(yfloor, tz1) * yscale1);
+            const y1a = y1b - diff;
+
+            // #TODO
+            //    * Log all ytop's and ybottom's for each visibile sector. Then cross reference for masking sprite.
+            //    * Draw sprite 1 column at a time.
+
+            // Draw sprite outline
+            this.context.beginPath();
+            this.context.strokeStyle = '#000000';
+            this.context.fillStyle = '#2ecc71';
+            this.context.rect(x1 - diff, y1a, diff, diff);
+            this.context.fill();
+            this.context.stroke();
+            this.context.closePath();
+
+            // Draw centre line of sprite
+            this.context.beginPath();
+            this.context.strokeStyle = '#000000';
+            this.context.moveTo(ox1, y1a);
+            this.context.lineTo(ox1, y1b);
+            this.context.stroke();
+            this.context.closePath();
+
+        }
+    }
+
     vline(x, y1, y2, color){
-        this.context.save();
         this.context.beginPath();
         this.context.strokeStyle = color;
-        this.context.moveTo(x, y1);
-        this.context.lineTo(x, y2);
+        this.context.moveTo(x-0.5, y1);
+        this.context.lineTo(x-0.5, y2);
         this.context.stroke();
         this.context.closePath();
-        this.context.restore();
     }
 
     render(){
@@ -226,7 +316,7 @@ export default class Camera {
 
         this.clear();
 
-        const sector = this.world[this.sector];
+        const sector = this.world.sectors[this.sector];
 
         let ytop = [];
         let ybottom = [];
@@ -237,6 +327,7 @@ export default class Camera {
         }
 
         this.renderSector(sector, 0, this.width-1, ytop, ybottom);
+        this.renderSprites();
         this.lastPosition = this.currentPosition;
     }
 }
