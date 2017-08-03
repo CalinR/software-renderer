@@ -1,4 +1,4 @@
-import { toRadians, intersectBox, pointSide, clamp } from './utils/'
+import { toRadians, intersectBox, pointSide, clamp, scalerInit, scalerNext } from './utils/'
 import GameObject from './GameObject'
 
 function CameraException(message) {
@@ -34,6 +34,10 @@ export default class Camera {
             y: parent.y
         }
         this.sector = this.getActiveSector();
+        this.cached = {
+            ytop: [],
+            ybottom: []
+        }
 
         Camera.optimizeCanvas(element);
     }
@@ -179,6 +183,8 @@ export default class Camera {
             const beginX = parseInt(Math.max(x1, sx1));
             const endX = parseInt(Math.min(x2, sx2));
 
+            let zInt = scalerInit(x1, beginX, x2, tz1/4, tz2/4);
+
             // Is the wall on screen
             if(endX < 0 || beginX > this.width){
                 continue;
@@ -191,21 +197,25 @@ export default class Camera {
                 /* Acquire the Y coordinates for our floor & ceiling for this X coordinate */
                 const ya = (x-x1) * (y2a-y1a) / (x2-x1) + y1a;
                 const yb = (x-x1) * (y2b-y1b) / (x2-x1) + y1b;
+
+                let z = scalerNext(zInt);
+                zInt.result = z;
                 
                 /* Clamp the ya & yb */
                 const cya = clamp(ya, ytop[x], ybottom[x]);
                 const cyb = clamp(yb, ytop[x],ybottom[x]);
 
-                nytop[x] = cya+1;
-                nybottom[x] = cyb;
+                nytop[x] = parseInt(cya+1);
+                nybottom[x] = parseInt(cyb);
 
                 /* Render ceiling: everything above this sector's ceiling height. */
                 this.vline(x, ytop[x], cya+1, '#34495e');
                 /* Render floor: everything below this sector's floor height. */
-                this.vline(x,cyb,  ybottom[x], '#3498db');
+                this.vline(x,cyb,  ybottom[x]+1, '#3498db');
 
                 if(neighbour<0){
-                    this.vline(x, cya+1, cyb+1, x == beginX || x == endX ? '#000000' : '#ecf0f1');
+                    let r = parseInt(255 - z);
+                    this.vline(x, cya+1, cyb+1, x == beginX || x == endX ? `rgb(${r-25}, ${r-25}, ${r-25})` : `rgb(${r}, ${r}, ${r})`);
                 }
                 else {
                     /* Aquire the Y coordinates for our neighbour's floor and ceiling for this X coordinate */
@@ -217,34 +227,59 @@ export default class Camera {
 
                     // If our ceiling is higher than the neighours ceiling, render it
                     if(cnya > cya){
-                        this.vline(x, cya, cnya+1, x == beginX || x == endX ? '#000000' : '#ecf0f1');
-                        nytop[x] = clamp(cnya, nytop[x], this.height); // 199 is likely not correct
+                        let ceilingColor = parseInt(255 - z);
+                        this.vline(x, cya, cnya+1, x == beginX || x == endX ? `rgb(${ceilingColor-25}, ${ceilingColor-25}, ${ceilingColor-25})` : `rgb(${ceilingColor}, ${ceilingColor}, ${ceilingColor})`);
+                        nytop[x] = parseInt(clamp(cnya, nytop[x], this.height));
                     }
                     else {
-                        nytop[x] = clamp(cya, nytop[x], this.height);
+                        nytop[x] = parseInt(clamp(cya, nytop[x], this.height));
                     }
 
                     // If our floor is lower than the neighbours floor, render it
                     if(cyb > cnyb){
-                        this.vline(x, cnyb - 1, cyb, x == beginX || x == endX ? '#000000' : '#2980b9');
-                        nybottom[x] = clamp(cnyb, 0, ybottom[x]);
+                        const floorColor = {
+                            r: parseInt(52 - z),
+                            g: parseInt(152 - z),
+                            b: parseInt(219 - z)
+                        }
+                        this.vline(x, cnyb - 1, cyb, x == beginX || x == endX ? `rgb(${floorColor.r-25}, ${floorColor.g-25}, ${floorColor.b-25})` : `rgb(${floorColor.r}, ${floorColor.g}, ${floorColor.b})`);
+                        nybottom[x] = parseInt(clamp(cnyb, 0, ybottom[x]));
                     }
                     else {
-                        nybottom[x] = clamp(cyb, 0, ybottom[x]);
+                        nybottom[x] = parseInt(clamp(cyb, 0, ybottom[x]));
                     }
                 }
             }
 
 
             if(neighbour>-1){
+                if(ybottom.length){
+                    this.cached.ybottom[sector.id] = ybottom;
+                }
+                if(ytop.length){
+                    this.cached.ytop[sector.id] = ytop;
+                }
                 this.renderSector(this.world.sectors[neighbour], beginX, endX, nytop, nybottom);
             }
-
         }
     }
 
     renderSprites(){
+        // console.log(this.cached, 'cached');
+        // console.log(this.world.enemies);
+
+        
+
         for(const sprite of this.world.enemies){
+            if(!this.cached.ybottom[sprite.sector] && !this.cached.ytop[sprite.sector]){
+                continue;
+            }
+
+            const mask = {
+                ybottom: this.cached.ybottom[sprite.sector],
+                ytop: this.cached.ytop[sprite.sector]
+            }
+            // console.log(mask, sprite);
             const vx1 = sprite.x - this.parent.x;
             const vy1 = sprite.y - this.parent.y;
 
@@ -268,13 +303,27 @@ export default class Camera {
             const ox1 = this.width / 2 + (-otx1 * xscale1);
             const diff = Math.max(x1, x2) - Math.min(x1, x2);
             const yfloor = 0 - (this.z + this.parent.z); // 0 needs to be sprite's z coordinate
-
             const y1b = this.height / 2 + (-this.yaw(yfloor, tz1) * yscale1);
             const y1a = y1b - diff;
 
-            // #TODO
-            //    * Log all ytop's and ybottom's for each visibile sector. Then cross reference for masking sprite.
-            //    * Draw sprite 1 column at a time.
+            /* Calculate mask */
+            // const ybottomEnd = Object.keys(mask.ybottom)[mask.ybottom.length-1];
+            // const ybottomStart = Object.keys(mask.ybottom)[0];
+            // const ytopEnd = Object.keys(mask.ytop)[mask.ytop.length-1];
+            // const ytopStart = Object.keys(mask.ytop)[0];
+            // const startRange = parseInt(Math.min(ybottomEnd, ytopEnd));
+            // const endRange = parseInt(Math.max(ybottomStart, ytopStart));
+            // const start = Math.min(startRange, endRange);
+            // const end = Math.max(startRange, endRange);
+            // const beginX = clamp(parseInt(x1-diff), start, end);
+            // const endX = clamp(parseInt(x1), start, end);
+
+            // /* TODO: Optimize this and fix bug where sprite disappears */
+            // for(let x=beginX; x<=endX; x++){
+            //     const topY = Math.max(y1a, mask.ytop[x]);
+            //     const bottomY = Math.min(y1a+diff, mask.ybottom[x]);
+            //     this.vline(x, topY, bottomY, '#2ecc71');
+            // }
 
             // Draw sprite outline
             this.context.beginPath();
@@ -286,12 +335,12 @@ export default class Camera {
             this.context.closePath();
 
             // Draw centre line of sprite
-            this.context.beginPath();
-            this.context.strokeStyle = '#000000';
-            this.context.moveTo(ox1, y1a);
-            this.context.lineTo(ox1, y1b);
-            this.context.stroke();
-            this.context.closePath();
+            // this.context.beginPath();
+            // this.context.strokeStyle = '#000000';
+            // this.context.moveTo(ox1, y1a);
+            // this.context.lineTo(ox1, y1b);
+            // this.context.stroke();
+            // this.context.closePath();
 
         }
     }
