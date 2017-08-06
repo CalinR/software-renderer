@@ -143,12 +143,12 @@ export default class Camera {
 
             /* Is any part of the wall behind the player */
             if(tz1 <= 0){
-                tx1 = (0.01 - tz1) * (tx2 - tx1) / (tz2 - tz1) + tx1;
-                tz1 = 0.01;
+                tx1 = (0.0001 - tz1) * (tx2 - tx1) / (tz2 - tz1) + tx1;
+                tz1 = 0.0001;
             }
             if(tz2 <= 0){
-                tx2 = (0.01 - tz2) * (tx1 - tx2) / (tz1 - tz2) + tx2;
-                tz2 = 0.01;
+                tx2 = (0.0001 - tz2) * (tx1 - tx2) / (tz1 - tz2) + tx2;
+                tz2 = 0.0001;
             }
 
             /* Do perspective transformation */
@@ -188,9 +188,6 @@ export default class Camera {
 
             let zInt = scalerInit(x1, beginX, x2, tz1*4, tz2*4);
 
-            // If camera is in between sectors, it will only render parts of the screen
-            // Render out transformed points to an above view to see what's happening
-
             // Is the wall on screen
             if(endX < 0 || beginX > this.width){
                 continue;
@@ -200,7 +197,6 @@ export default class Camera {
             let nytop = [];
             let nybottom = [];
 
-            // console.log(beginX, endX, 'positions + ' + sector.id, this.sector);
 
             for(let x = beginX; x < endX; x++){
                 /* Acquire the Y coordinates for our floor & ceiling for this X coordinate */
