@@ -26,16 +26,14 @@ export default class Camera {
         this.parent = parent;
         this.world = world;
         this.rotation = rotation;
-        // this.hfov = (1.0 * 0.73 * this.height / this.width); // This should be 0.6 (60)
-        // this.vfov = (1.0 * .2); // This should be hfov / aspect ratio. (3/4 = .75 = 0.6 * .75 = 0.45)
-        this.hfov = 0.6;
-        this.vfov = 0.45;
+        this.hfov = (1.0 * 0.73 * this.height / this.width);
+        this.vfov = (1.0 * .2);
         this.context = element.getContext('2d');
         this.lastPosition = {
             x: parent.x,
             y: parent.y
         }
-        this.sector = this.getActiveSector(); // This shouldn't be handled by the camera. This should be handled by the game code which would check on every frame which objects have changed sectors.
+        this.sector = this.getActiveSector();
         this.cached = {
             ytop: [],
             ybottom: []
@@ -106,7 +104,6 @@ export default class Camera {
                 const vy2 = (i >= sector.vertices.length-1 ? sector.vertices[0].y : sector.vertices[i+1].y);
                 
                 if(intersectBox(this.currentPosition.x, this.currentPosition.y, this.lastPosition.x, this.lastPosition.y, vx1, vy1, vx2, vy2)){
-                    // console.log(pointSide(this.currentPosition.x, this.currentPosition.y, vx1, vy1, vx2, vy2));
                     if(pointSide(this.currentPosition.x, this.currentPosition.y, vx1, vy1, vx2, vy2) > 0){
                         this.sector = sector.id;
                         this.parent.sector = sector;
@@ -184,23 +181,17 @@ export default class Camera {
             let ny2b = this.height / 2 + (-this.yaw(nyfloor, tz2) * yscale2);
 
             const beginX = parseInt(Math.max(x1, sx1));
-            let endX = parseInt(Math.min(x2, sx2));
+            const endX = parseInt(Math.min(x2, sx2));
 
-            let zInt = scalerInit(x1, beginX, x2, tz1*4, tz2*4);
-
-            // If camera is in between sectors, it will only render parts of the screen
-            // Render out transformed points to an above view to see what's happening
+            let zInt = scalerInit(x1, beginX, x2, tz1/4, tz2/4);
 
             // Is the wall on screen
             if(endX < 0 || beginX > this.width){
                 continue;
             }
-            
 
             let nytop = [];
             let nybottom = [];
-
-            // console.log(beginX, endX, 'positions + ' + sector.id, this.sector);
 
             for(let x = beginX; x < endX; x++){
                 /* Acquire the Y coordinates for our floor & ceiling for this X coordinate */
@@ -224,7 +215,7 @@ export default class Camera {
 
                 if(neighbour<0){
                     let r = parseInt(255 - z);
-                    this.vline(x, cya+1, cyb+1, x == beginX || x == endX ? `rgb(${r}, ${r}, ${r})` : `rgb(${r}, ${r}, ${r})`);
+                    this.vline(x, cya+1, cyb+1, x == beginX || x == endX ? `rgb(${r-25}, ${r-25}, ${r-25})` : `rgb(${r}, ${r}, ${r})`);
                 }
                 else {
                     /* Aquire the Y coordinates for our neighbour's floor and ceiling for this X coordinate */
@@ -237,7 +228,7 @@ export default class Camera {
                     // If our ceiling is higher than the neighours ceiling, render it
                     if(cnya > cya){
                         let ceilingColor = parseInt(255 - z);
-                        this.vline(x, cya, cnya+1, x == beginX || x == endX ? `rgb(${ceilingColor}, ${ceilingColor}, ${ceilingColor})` : `rgb(${ceilingColor}, ${ceilingColor}, ${ceilingColor})`);
+                        this.vline(x, cya, cnya+1, x == beginX || x == endX ? `rgb(${ceilingColor-25}, ${ceilingColor-25}, ${ceilingColor-25})` : `rgb(${ceilingColor}, ${ceilingColor}, ${ceilingColor})`);
                         nytop[x] = parseInt(clamp(cnya, nytop[x], this.height));
                     }
                     else {
@@ -251,7 +242,7 @@ export default class Camera {
                             g: parseInt(152 - z),
                             b: parseInt(219 - z)
                         }
-                        this.vline(x, cnyb - 1, cyb, x == beginX || x == endX ? `rgb(${floorColor.r}, ${floorColor.g}, ${floorColor.b})` : `rgb(${floorColor.r}, ${floorColor.g}, ${floorColor.b})`);
+                        this.vline(x, cnyb - 1, cyb, x == beginX || x == endX ? `rgb(${floorColor.r-25}, ${floorColor.g-25}, ${floorColor.b-25})` : `rgb(${floorColor.r}, ${floorColor.g}, ${floorColor.b})`);
                         nybottom[x] = parseInt(clamp(cnyb, 0, ybottom[x]));
                     }
                     else {
@@ -274,6 +265,11 @@ export default class Camera {
     }
 
     renderSprites(){
+        // console.log(this.cached, 'cached');
+        // console.log(this.world.enemies);
+
+        
+
         for(const sprite of this.world.enemies){
             if(!this.cached.ybottom[sprite.sector] && !this.cached.ytop[sprite.sector]){
                 continue;
