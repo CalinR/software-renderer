@@ -9,6 +9,10 @@ export default class GameObject {
             y: y,
             z: z,
             rotation: rotation,
+            velocity: {
+                x: 0,
+                y: 0
+            },
             sector: sector
         }
         this.onMove = null;
@@ -37,6 +41,12 @@ export default class GameObject {
     set rotation(rotation){
         this.state.rotation = rotation;
     }
+    get velocity(){
+        return this.state.velocity;
+    }
+    set velocity(velocity){
+        this.state.velocity = velocity;
+    }
     get sector(){
         return this.state.sector;
     }
@@ -47,11 +57,13 @@ export default class GameObject {
     queueUpdate(){
         const oldState = Object.assign({}, this.state);
         this.update();
-        if(JSON.stringify(this.state) !== JSON.stringify(oldState)){
+        if(this.velocity.x != 0 && this.velocity.y != 0){
             if(typeof this.onMove == 'function'){
-                this.onMove(oldState, Object.assign({}, this.state));
+                this.onMove(oldState, Object.assign({}, this.state), this);
             }
         }
+        this.x += this.velocity.x;
+        this.y += this.velocity.y;
     }
 
     update(){
